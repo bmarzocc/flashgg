@@ -1,3 +1,4 @@
+
 import subprocess
 import FWCore.ParameterSet.Config as cms
 import os
@@ -9,27 +10,44 @@ from flashgg.Taggers.flashggPreselectedDiPhotons_cfi import flashggPreselectedDi
 from flashgg.Taggers.flashggPreselectedDiPhotons_LowMass_cfi import flashggPreselectedDiPhotonsLowMass
 import flashgg.Taggers.dumperConfigTools as cfgTools
 
+options = VarParsing('analysis')
+options.register('dataset',
+                 '',
+                 VarParsing.multiplicity.list,
+                 VarParsing.varType.string,
+                 "Input dataset(s)")
 
-# options = VarParsing('analysis')
-# processIdMap = {}
-# options.register('dataset',
-#                  '',
-#                  VarParsing.multiplicity.list,
-#                  VarParsing.varType.string,
-#                  "Input dataset(s)")
-#
-# options.register('campaign',
-#                  '',
-#                  VarParsing.multiplicity.singleton,
-#                  VarParsing.varType.string,
-#                  "campaign")
-#
-# options.parseArguments()
+options.register('campaign',
+                 '',
+                 VarParsing.multiplicity.singleton,
+                 VarParsing.varType.string,
+                 "campaign")
+
+options.register('stdDumper',
+                 '',
+                 VarParsing.multiplicity.singleton,
+                 VarParsing.varType.bool,
+                 "stdDumper")
+
+options.register('vtxBDTDumper',
+                 '',
+                 VarParsing.multiplicity.singleton,
+                 VarParsing.varType.bool,
+                 "vtxBDTDumper")
+
+options.register('vtxProbDumper',
+                 '',
+                 VarParsing.multiplicity.singleton,
+                 VarParsing.varType.bool,
+                 "vtxProbDumper")
+
+options.parseArguments()
 
 
 process = cms.Process("FLASHggH4GTest")
 
-process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(-1) )
+# process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(100) )
+
 
 ###---H4G candidates production
 process.FlashggH4GCandidate = FlashggH4GCandidate.clone()
@@ -40,73 +58,119 @@ process.FlashggH4GCandidate.idSelection = cms.PSet(
         categories = flashggPreselectedDiPhotonsLowMass.categories
         )
 
+###--- get the variables
 import flashgg.Taggers.H4GTagVariables as var
-all_variables = var.pho_variables + var.dipho_variables + var.tp_variables
+vtx_BDT_variables_sig = var.vtx_BDT_variables_sig
+vtx_BDT_variables_bkg = var.vtx_BDT_variables_bkg
+vtxProb_BDT_variables = var.vtx_variables + var.vtxProb_BDT_variables
+all_variables = var.pho_variables + var.dipho_variables + var.vtx_variables + var.tp_variables
 
 from flashgg.Taggers.h4gCandidateDumper_cfi import h4gCandidateDumper
-process.h4gCandidateDumper = h4gCandidateDumper.clone()
-process.h4gCandidateDumper.dumpTrees = False
-process.h4gCandidateDumper.dumpWorkspace = True
 
-cfgTools.addCategories(process.h4gCandidateDumper,
+process.h4gCandidateDumper_vtxBDT_sig = h4gCandidateDumper.clone()
+process.h4gCandidateDumper_vtxBDT_sig.dumpTrees = True
+process.h4gCandidateDumper_vtxBDT_sig.dumpWorkspace = False
+
+cfgTools.addCategories(process.h4gCandidateDumper_vtxBDT_sig,
                         [
                             ("Reject", "", -1),
-                            #("4photons","phoVector.size() > 3 "),
-                             ("4photons","phoVector.size() > 3 && phoP4Corrected[0].pt() > 30 && phoP4Corrected[1].pt() > 20 && phoP4Corrected[2].pt() > 10 && phoP4Corrected[3].pt() > 10 && abs(phoP4Corrected[0].eta()) < 2.5 && abs(phoP4Corrected[1].eta()) < 2.5 && abs(phoP4Corrected[2].eta()) < 2.5 && abs(phoP4Corrected[3].eta()) < 2.5 && pho1_MVA > -0.9 && pho2_MVA > -0.9 && pho3_MVA > -0.6 && pho4_MVA > -0.6 && h4gFourVect.mass() > 100 && h4gFourVect.mass() < 180", 0),
+                            ("4photons_sig","phoVector.size() > 3"),
+                            ("3photons_sig","phoVector.size() == 3", 0),
+                            ("2photons_sig","phoVector.size() == 2", 0)
+                        ],
+                        variables = vtx_BDT_variables_sig,
+                        histograms=[]
+                        ) 
+
+
+process.h4gCandidateDumper_vtxBDT_bkg = h4gCandidateDumper.clone()
+process.h4gCandidateDumper_vtxBDT_bkg.dumpTrees = True
+process.h4gCandidateDumper_vtxBDT_bkg.dumpWorkspace = False
+
+cfgTools.addCategories(process.h4gCandidateDumper_vtxBDT_bkg,
+                        [
+                            ("Reject", "", -1),
+                            ("4photons_bkg","phoVector.size() > 3"),
+                            ("3photons_bkg","phoVector.size() == 3", 0),
+                            ("2photons_bkg","phoVector.size() == 2", 0)  
+                        ],
+                        variables = vtx_BDT_variables_bkg,
+                        histograms=[]
+                        )        
+
+process.h4gCandidateDumper_vtxProb = h4gCandidateDumper.clone()
+process.h4gCandidateDumper_vtxProb.dumpTrees = True
+process.h4gCandidateDumper_vtxProb.dumpWorkspace = False
+
+cfgTools.addCategories(process.h4gCandidateDumper_vtxProb,
+                        [
+                            ("Reject", "", -1),
+                            ("4photons","phoVector.size() > 3"),
+                            ("3photons","phoVector.size() == 3", 0),
+                            ("2photons","phoVector.size() == 2", 0)  
+                        ],
+                        variables = vtxProb_BDT_variables,
+                        histograms=[]
+                        )        
+
+process.h4gCandidateDumper = h4gCandidateDumper.clone()
+process.h4gCandidateDumper.dumpTrees = True
+process.h4gCandidateDumper.dumpWorkspace = False
+
+cfgTools.addCategories(process.h4gCandidateDumper,
+                       [
+                            ("Reject", "", -1),
+                            ("4photons","phoVector.size() > 3 "),
+                            # ("4photons","phoVector.size() > 3 && phoP4Corrected[0].pt() > 30 && phoP4Corrected[1].pt() > 20 && phoP4Corrected[2].pt() > 10 && phoP4Corrected[3].pt() > 10 && abs(phoP4Corrected[0].eta()) < 2.5 && abs(phoP4Corrected[1].eta()) < 2.5 && abs(phoP4Corrected[2].eta()) < 2.5 && abs(phoP4Corrected[3].eta()) < 2.5 && pho1_MVA > -0.9 && pho2_MVA > -0.9 && pho3_MVA > -0.9 && pho4_MVA > -0.9 && h4gFourVect.mass() > 100 && h4gFourVect.mass() < 180", 0),
                             ("3photons","phoVector.size() == 3", 0),
                             ("2photons","phoVector.size() == 2", 0)
                         ],
                         variables = all_variables,
                         histograms=[]
-                        )
+                        )  
 
-# files = []
-# secondary_files = []
-# for dataset in dataset:
-#     print('>> Creating list of files from: \n'+dataset)
-#     for instance in ['global', 'phys03']:
-#         query = "-query='file dataset="+dataset+" instance=prod/"+instance+"'"
-#         lsCmd = subprocess.Popen(['dasgoclient '+query+' -limit=0'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-#         str_files, err = lsCmd.communicate()
-#         files.extend(['root://cms-xrd-global.cern.ch/'+ifile for ifile in str_files.split("\n")])
-#         files.pop()
-#         for file in files:
-#             query = "-query='parent file="+file[len('root://cms-xrd-global.cern.ch/'):]+" instance=prod/"+instance+"'"
-#             lsCmd = subprocess.Popen(['dasgoclient '+query+' -limit=0'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-#             str_files, err = lsCmd.communicate()
-#             secondary_files.extend(['root://cms-xrd-global.cern.ch/'+ifile for ifile in str_files.split("\n")])
-#             secondary_files.pop()
+files = []
+secondary_files = []
+for dataset in options.dataset:
+    print('>> Creating list of files from: \n'+dataset)
+    for instance in ['global', 'phys03']:
+        query = "-query='file dataset="+dataset+" instance=prod/"+instance+"'"
+        lsCmd = subprocess.Popen(['dasgoclient '+query+' -limit=0'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+        str_files, err = lsCmd.communicate()
+        files.extend(['root://cms-xrd-global.cern.ch/'+ifile for ifile in str_files.split("\n")])
+        files.pop()
+        for file in files:
+            query = "-query='parent file="+file[len('root://cms-xrd-global.cern.ch/'):]+" instance=prod/"+instance+"'"
+            lsCmd = subprocess.Popen(['dasgoclient '+query+' -limit=0'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+            str_files, err = lsCmd.communicate()
+            secondary_files.extend(['root://cms-xrd-global.cern.ch/'+ifile for ifile in str_files.split("\n")])
+            secondary_files.pop()
 
-# for f in files:
-#     print f
-#     print " "
-#
-#
-# for s in secondary_files:
-#     print s
-#     print " "
+for f in files:
+    print f
+    print " "
+
+
+for s in secondary_files:
+    print s
+    print " "
 process.source = cms.Source ("PoolSource",
-                             # fileNames = cms.untracked.vstring(files),
-                             fileNames = cms.untracked.vstring(
-"root://eoscms.cern.ch//eos/cms/store/group/phys_higgs/HiggsExo/H4Gamma/MicroAOD/H4G_Jun7/v0/SUSYGluGluToHToAA_AToGG_M-60_TuneCUETP8M1_13TeV_pythia8/Test_jun7-R2S16MAODv2-PUM17_GT/170607_180035/0000/myMicroAODOutputFile_9.root")
-                             # print fileNames
-                             # secondaryFileNames = cms.untracked.vstring("root://cms-xrd-global.cern.ch//store/mc/RunIISummer16MiniAODv2/SUSYGluGluToHToAA_AToGG_M-60_TuneCUETP8M1_13TeV_pythia8/MINIAODSIM/PUMoriond17_80X_mcRun2_asymptotic_2016_TrancheIV_v6-v1/50000/C85D3FF6-84C8-E611-B11D-D4AE526A0B29.root")
-                             # secondaryFileNames = cms.untracked.vstring(secondary_files)
+                             fileNames = cms.untracked.vstring(files),
+                             secondaryFileNames = cms.untracked.vstring(secondary_files)
 )
-
-
 
 process.TFileService = cms.Service("TFileService",
                                    fileName = cms.string("test.root"),
                                    closeFileFast = cms.untracked.bool(True)
 )
-# process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(100) )
+process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(100) )
 
 ##--import flashgg customization
 from flashgg.MetaData.JobConfig import customize
 import FWCore.ParameterSet.VarParsing as VarParsing
+
 ##--set default options
-customize.setDefault("maxEvents",-1)
+# customize.setDefault("maxEvents",-1)
 # customize.setDefault("targetLumi",1e+3)
 # customize.register('PURW',
 # 				1,
@@ -126,14 +190,6 @@ customize(process)
 if customize.inputFiles:
     inputFile = customize.inputFiles
 
-if customize.outputFile:
-    outputFile = customize.outputFile
-
-# customize.parse()
-# process.TFileService = cms.Service("TFileService",
-#                                    fileName = cms.string("output.root"),
-#                                    closeFileFast = cms.untracked.bool(True)
-# )
 
 # Require low mass diphoton triggers
 from HLTrigger.HLTfilters.hltHighLevel_cfi import hltHighLevel
@@ -161,11 +217,18 @@ if customize.processId == "Data":
    process.dataRequirements += process.hltHighLevel
    process.dataRequirements += process.eeBadScFilter
 
-# process.load("flashgg/Taggers/vtxH4GSequence")
+process.load("flashgg/Taggers/vtxH4GSequence")
 
-process.path = cms.Path(process.dataRequirements*process.FlashggH4GCandidate*process.h4gCandidateDumper)
-# process.path = cms.Path(process.vtxH4GSequence*process.dataRequirements*process.FlashggH4GCandidate*process.h4gCandidateDumper)
+if options.stdDumper:
+   #standard dumper sequence 
+   process.path = cms.Path(process.vtxH4GSequence*process.dataRequirements*process.FlashggH4GCandidate*process.h4gCandidateDumper)
 
-# process.path = cms.Path(process.FlashggH4GCandidate+process.h4gCandidateDumper)
-#process.e = cms.EndPath(process.out)
-# customize(process)
+if options.vtxBDTDumper:
+   #vtxBDT dumper sequence 
+   process.path = cms.Path(process.vtxH4GSequence*process.dataRequirements*process.FlashggH4GCandidate*process.h4gCandidateDumper_vtxBDT_sig*process.h4gCandidateDumper_vtxBDT_bkg)
+
+if options.vtxProbDumper:
+   #vtxProb dumper sequence 
+   process.path = cms.Path(process.vtxH4GSequence*process.dataRequirements*process.FlashggH4GCandidate*process.h4gCandidateDumper_vtxProb)
+
+

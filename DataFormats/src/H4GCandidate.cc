@@ -1,7 +1,42 @@
+#include "FWCore/Framework/interface/EDProducer.h"
+#include "FWCore/Framework/interface/Event.h"
+#include "FWCore/Framework/interface/MakerMacros.h"
+#include "FWCore/Utilities/interface/InputTag.h"
+#include "DataFormats/Common/interface/Handle.h"
+#include "FWCore/Framework/interface/Event.h"
+#include "FWCore/ParameterSet/interface/ParameterSet.h"
+#include "FWCore/Utilities/interface/EDMException.h"
+#include "CommonTools/UtilAlgos/interface/TFileService.h"
+#include "FWCore/ServiceRegistry/interface/Service.h"
+
+#include "flashgg/DataFormats/interface/DiPhotonCandidate.h"
+#include "flashgg/DataFormats/interface/SinglePhotonView.h"
+#include "flashgg/DataFormats/interface/Photon.h"
+#include "flashgg/DataFormats/interface/Jet.h"
+#include "DataFormats/VertexReco/interface/Vertex.h"
+#include "flashgg/DataFormats/interface/VertexCandidateMap.h"
+#include "flashgg/DataFormats/interface/DiPhotonMVAResult.h"
+#include "flashgg/DataFormats/interface/TagTruthBase.h"
+#include "DataFormats/Common/interface/RefToPtr.h"
+#include "DataFormats/BeamSpot/interface/BeamSpot.h"
+#include "SimDataFormats/GeneratorProducts/interface/GenEventInfoProduct.h"
+#include "DataFormats/HepMCCandidate/interface/GenParticleFwd.h"
+#include "DataFormats/HepMCCandidate/interface/GenParticle.h"
+#include "flashgg/MicroAOD/interface/CutBasedDiPhotonObjectSelector.h"
+#include "DataFormats/EgammaCandidates/interface/Conversion.h"
+#include "flashgg/DataFormats/interface/H4GCandidate.h"
+
 #include "TLorentzVector.h"
 #include "DataFormats/Math/interface/LorentzVector.h"
-#include "flashgg/DataFormats/interface/Photon.h"
-#include "flashgg/DataFormats/interface/H4GCandidate.h"
+
+#include "DataFormats/Candidate/interface/LeafCandidate.h"
+#include "DataFormats/Math/interface/deltaR.h"
+#include "FWCore/ParameterSet/interface/FileInPath.h"
+
+#include "flashgg/Taggers/interface/FunctionHelpers.h"
+
+#include "flashgg/DataFormats/interface/DiPhotonMVAResult.h"
+#include "TMVA/Reader.h"
 
 using namespace flashgg;
 H4GCandidate::H4GCandidate():
@@ -14,7 +49,12 @@ vertex_diphoton_ (),
 BS_factor_0Vtx_ (),
 BS_factor_HggVtx_(),
 BS_factor_RandomVtx_ (),
+BS_factor_BDTVtx_ (),
 phoP4Corrected_ (),
+phoP4Corrected1_ (),
+phoP4Corrected2_ (),
+phoP4Corrected3_ (),
+phoP4Corrected4_ (),
 pho1_MVA_ (),
 pho2_MVA_ (),
 pho3_MVA_ (),
@@ -39,21 +79,37 @@ tp_ ()
 {}
 
   H4GCandidate::~H4GCandidate() {}
-  // H4GCandidate::H4GCandidate( std::vector<flashgg::Photon> phoVector, std::vector<edm::Ptr<reco::Vertex>> Vertices, std::vector<edm::Ptr<reco::Vertex>> slim_Vertices, edm::Ptr<reco::Vertex> vertex_diphoton, reco::GenParticle::Point genVertex, math::XYZPoint BSPoint, std::vector <edm::Ptr<flashgg::DiPhotonCandidate>> diPhoPtrs, std::vector<std::vector<float>> Vector, int hgg_index):
-  // phoVector_(phoVector), Vertices_(Vertices), slim_Vertices_(slim_Vertices),vertex_diphoton_(vertex_diphoton), genVertex_(genVertex), BSPoint_(BSPoint), diPhoPtrs_(diPhoPtrs), Vector_(Vector), hgg_index_(hgg_index)
-  H4GCandidate::H4GCandidate( std::vector<flashgg::Photon> phoVector, std::vector<edm::Ptr<reco::Vertex>> Vertices, std::vector<edm::Ptr<reco::Vertex>> slim_Vertices, edm::Ptr<reco::Vertex> vertex_diphoton, reco::GenParticle::Point genVertex, math::XYZPoint BSPoint, std::vector <edm::Ptr<flashgg::DiPhotonCandidate>> diPhoPtrs, int hgg_index, bool atLeastOneDiphoPass):
-  phoVector_(phoVector), Vertices_(Vertices), slim_Vertices_(slim_Vertices),vertex_diphoton_(vertex_diphoton), genVertex_(genVertex), BSPoint_(BSPoint), diPhoPtrs_(diPhoPtrs), hgg_index_(hgg_index), atLeastOneDiphoPass_(atLeastOneDiphoPass)
+  H4GCandidate::H4GCandidate( std::vector<flashgg::Photon> phoVector, std::vector<edm::Ptr<reco::Vertex>> Vertices, std::vector<edm::Ptr<reco::Vertex>> slim_Vertices, edm::Ptr<reco::Vertex> vertex_diphoton, edm::Ptr<reco::Vertex> vertex_bdt, reco::GenParticle::Point genVertex, math::XYZPoint BSPoint, std::vector <edm::Ptr<flashgg::DiPhotonCandidate>> diPhoPtrs, std::vector<std::vector<float>> Vector, float MVA0, float MVA1, float MVA2, float dZ1, float dZ2, float dZtrue, int hgg_index, int trueVtx_index, int rndVtx_index, int bdtVtx_index, edm::FileInPath vertexProbMVAweightfileH4G):
+  phoVector_(phoVector), Vertices_(Vertices), slim_Vertices_(slim_Vertices),vertex_diphoton_(vertex_diphoton), vertex_bdt_(vertex_bdt), genVertex_(genVertex), BSPoint_(BSPoint), diPhoPtrs_(diPhoPtrs), Vector_(Vector), MVA0_(MVA0), MVA1_(MVA1), MVA2_(MVA2), dZ1_(dZ1), dZ2_(dZ2), dZtrue_(dZtrue), hgg_index_(hgg_index), trueVtx_index_(trueVtx_index), rndVtx_index_(rndVtx_index), bdtVtx_index_(bdtVtx_index), vertexProbMVAweightfileH4G_(vertexProbMVAweightfileH4G)
   {
 
-    int random_vtx = rand() % slim_Vertices_.size();
+    float tp_pt_vtxProb;
+    float nVertices_vtxProb;
+    float MVA0_vtxProb;
+    float MVA1_vtxProb;
+    float dZ1_vtxProb;
+    float MVA2_vtxProb;
+    float dZ2_vtxProb;
+    float nConv_vtxProb;
 
-    float vtx_X = Vertices_[0]->x();
-    float vtx_Y = Vertices_[0]->y();
-    float vtx_Z = Vertices_[0]->z();
+    TMVA::Reader *VertexProbMva_;
+    VertexProbMva_ = new TMVA::Reader( "!Color:Silent" );
+    VertexProbMva_->AddVariable( "tp_pt", &tp_pt_vtxProb );
+    VertexProbMva_->AddVariable( "n_vertices", &nVertices_vtxProb );
+    VertexProbMva_->AddVariable( "MVA0", &MVA0_vtxProb );
+    VertexProbMva_->AddVariable( "MVA1", &MVA1_vtxProb );
+    VertexProbMva_->AddVariable( "dZ1", &dZ1_vtxProb );
+    VertexProbMva_->AddVariable( "MVA2", &MVA2_vtxProb );
+    VertexProbMva_->AddVariable( "dZ2", &dZ2_vtxProb );
+    VertexProbMva_->AddVariable( "nConv", &nConv_vtxProb );
+    VertexProbMva_->BookMVA( "BDT", vertexProbMVAweightfileH4G_.fullPath() );
+
+    int random_vtx = rand() % slim_Vertices_.size();
     Vertex_random_ = slim_Vertices_[random_vtx];
-    // float vtx_X = slim_Vertices_[random_vtx]->x();
-    // float vtx_Y = slim_Vertices_[random_vtx]->y();
-    // float vtx_Z = slim_Vertices_[random_vtx]->z();
+
+    float vtx_X = Vertices_[bdtVtx_index]->x();
+    float vtx_Y = Vertices_[bdtVtx_index]->y();
+    float vtx_Z = Vertices_[bdtVtx_index]->z();
 
     //--Beam spot reweighting (https://github.com/cms-analysis/flashggFinalFit/blob/e60d53e19ac4f20e7ce187f0a34e483b4fc2a60e/Signal/test/SignalFit.cpp)
     float mcBeamSpotWidth_=5.14; //cm
@@ -62,6 +118,7 @@ tp_ ()
     float dZ_HggVtx = genVertex_.z() - vertex_diphoton_->z();
     float dZ_0Vtx = genVertex.z() - vtx_Z;
     float dZ_RandomVtx = genVertex.z() - Vertex_random_->z();
+    float dZ_BDTVtx = genVertex.z() - Vertices_[bdtVtx_index]->z();;
 
 
     if (fabs(dZ_HggVtx) < 0.1 ){
@@ -88,11 +145,16 @@ tp_ ()
       BS_factor_RandomVtx_ = dataBeamSpot_RandomVtx/mcBeamSpot_RandomVtx;
     }
 
-    // cout << BS_factor_HggVtx_ << "  " << BS_factor_0Vtx_ << endl;
-    // float vtx_X = vertex_->x();
-    // float vtx_Y = vertex_->y();
-    // float vtx_Z = vertex_->z();
+    if (fabs(dZ_BDTVtx) < 0.1 ){
+      BS_factor_BDTVtx_ =1;
+    } else {
+      double mcBeamSpot_BDTVtx=TMath::Gaus(dZ_BDTVtx,0,TMath::Sqrt(2)*mcBeamSpotWidth_,true);
+      double dataBeamSpot_BDTVtx=TMath::Gaus(dZ_BDTVtx,0,TMath::Sqrt(2)*dataBeamSpotWidth_,true);
+      BS_factor_BDTVtx_ = dataBeamSpot_BDTVtx/mcBeamSpot_BDTVtx;
+    }
+
     math::XYZVector vtx_Pos( vtx_X, vtx_Y, vtx_Z );
+
     if (phoVector_.size() > 0)
     {
       for( int p = 0; p < (int) phoVector_.size(); p++ )
@@ -108,10 +170,11 @@ tp_ ()
         phoP4Corrected_.push_back(phoVector_[p]);
       }
     }
-    pho1_MVA_ = phoP4Corrected_.size() > 0 ? phoP4Corrected_[0].phoIdMvaDWrtVtx(Vertices_[0]) : -999;
-    pho2_MVA_ = phoP4Corrected_.size() > 0 ? phoP4Corrected_[1].phoIdMvaDWrtVtx(Vertices_[0]) : -999;
-    pho3_MVA_ = phoP4Corrected_.size() > 2 ? phoP4Corrected_[2].phoIdMvaDWrtVtx(Vertices_[0]) : -999;
-    pho4_MVA_ = phoP4Corrected_.size() > 3 ? phoP4Corrected_[3].phoIdMvaDWrtVtx(Vertices_[0]) : -999;
+
+    pho1_MVA_ = -999.;
+    pho2_MVA_ = -999.;
+    pho3_MVA_ = -999.;
+    pho4_MVA_ = -999.;
 
     float minDM = 1000000;
     if (phoP4Corrected_.size() > 3)
@@ -145,12 +208,12 @@ tp_ ()
                 dp2_ipho1_ = i3;
                 dp2_pho2_ = pho4.p4();
                 dp2_ipho2_ = i4;
-                if ((pho1.pt() + pho2.pt()) > (pho3.pt() + pho4.pt()) )
+                if (dipho1.pt() > dipho2.pt())
                 {
                   dp1_ = dipho1;
                   dp2_ = dipho2;
                 }
-                else if ((pho1.pt() + pho2.pt()) < (pho3.pt() + pho4.pt()) )
+                else if (dipho1.pt() < dipho2.pt())
                 {
                   dp1_ = dipho2;
                   dp2_ = dipho1;
@@ -160,29 +223,71 @@ tp_ ()
           }
         }
       }
+
+      pho1_MVA_ = phoP4Corrected_[dp1_ipho1_].phoIdMvaDWrtVtx(Vertices_[bdtVtx_index]);
+      pho2_MVA_ = phoP4Corrected_[dp1_ipho2_].phoIdMvaDWrtVtx(Vertices_[bdtVtx_index]);
+      pho3_MVA_ = phoP4Corrected_[dp2_ipho1_].phoIdMvaDWrtVtx(Vertices_[bdtVtx_index]);
+      pho4_MVA_ = phoP4Corrected_[dp2_ipho2_].phoIdMvaDWrtVtx(Vertices_[bdtVtx_index]);
+
+      tp_ = phoP4Corrected_[dp1_ipho1_].p4() + phoP4Corrected_[dp1_ipho2_].p4() + phoP4Corrected_[dp2_ipho1_].p4() + phoP4Corrected_[dp2_ipho2_].p4();
+      pho12_ = phoP4Corrected_[dp1_ipho1_].p4() + phoP4Corrected_[dp1_ipho2_].p4();
+      pho13_ = phoP4Corrected_[dp1_ipho1_].p4() + phoP4Corrected_[dp2_ipho1_].p4();
+      pho14_ = phoP4Corrected_[dp1_ipho1_].p4() + phoP4Corrected_[dp2_ipho2_].p4();
+      pho23_ = phoP4Corrected_[dp1_ipho2_].p4() + phoP4Corrected_[dp2_ipho1_].p4();
+      pho24_ = phoP4Corrected_[dp1_ipho2_].p4() + phoP4Corrected_[dp2_ipho2_].p4();
+      pho34_ = phoP4Corrected_[dp2_ipho1_].p4() + phoP4Corrected_[dp2_ipho2_].p4();
+
+      phoP4Corrected1_ = phoP4Corrected_[dp1_ipho1_];
+      phoP4Corrected2_ = phoP4Corrected_[dp1_ipho2_];
+      phoP4Corrected3_ = phoP4Corrected_[dp2_ipho1_];
+      phoP4Corrected4_ = phoP4Corrected_[dp2_ipho2_];
     }
+
     if (phoP4Corrected_.size() == 2)
     {
+      dp1_ipho1_ = 0;
+      dp1_ipho2_ = 1;
+      dp2_ipho1_ = -1;
+      dp2_ipho2_ = -1;
+
       tp_ = phoP4Corrected_[0].p4() + phoP4Corrected_[1].p4();
       pho12_ = phoP4Corrected_[0].p4() + phoP4Corrected_[1].p4();
+      pho1_MVA_ = phoP4Corrected_[0].phoIdMvaDWrtVtx(Vertices_[bdtVtx_index]);
+      pho2_MVA_ = phoP4Corrected_[1].phoIdMvaDWrtVtx(Vertices_[bdtVtx_index]);
+
+      phoP4Corrected1_ = phoP4Corrected_[dp1_ipho1_];
+      phoP4Corrected2_ = phoP4Corrected_[dp1_ipho2_];
     }
     else if (phoP4Corrected_.size() == 3)
     {
+      dp1_ipho1_ = 0;
+      dp1_ipho2_ = 1;
+      dp2_ipho1_ = 2;
+      dp2_ipho2_ = -1;
+
       tp_ = phoP4Corrected_[0].p4() + phoP4Corrected_[1].p4() + phoP4Corrected_[2].p4();
       pho12_ = phoP4Corrected_[0].p4() + phoP4Corrected_[1].p4();
       pho13_ = phoP4Corrected_[0].p4() + phoP4Corrected_[2].p4();
       pho23_ = phoP4Corrected_[1].p4() + phoP4Corrected_[2].p4();
+      pho1_MVA_ = phoP4Corrected_[0].phoIdMvaDWrtVtx(Vertices_[bdtVtx_index]);
+      pho2_MVA_ = phoP4Corrected_[1].phoIdMvaDWrtVtx(Vertices_[bdtVtx_index]);
+      pho3_MVA_ = phoP4Corrected_[2].phoIdMvaDWrtVtx(Vertices_[bdtVtx_index]);
+
+      phoP4Corrected1_ = phoP4Corrected_[dp1_ipho1_];
+      phoP4Corrected2_ = phoP4Corrected_[dp1_ipho2_];
+      phoP4Corrected3_ = phoP4Corrected_[dp2_ipho1_];
     }
-    else if (phoP4Corrected_.size() > 3 )
-    {
-      tp_ = phoP4Corrected_[0].p4() + phoP4Corrected_[1].p4() + phoP4Corrected_[2].p4() + phoP4Corrected_[3].p4();
-      pho12_ = phoP4Corrected_[0].p4() + phoP4Corrected_[1].p4();
-      pho13_ = phoP4Corrected_[0].p4() + phoP4Corrected_[2].p4();
-      pho14_ = phoP4Corrected_[0].p4() + phoP4Corrected_[3].p4();
-      pho23_ = phoP4Corrected_[1].p4() + phoP4Corrected_[2].p4();
-      pho24_ = phoP4Corrected_[1].p4() + phoP4Corrected_[3].p4();
-      pho34_ = phoP4Corrected_[2].p4() + phoP4Corrected_[3].p4();
-    }
+
+    tp_pt_vtxProb =  tp_.pt();;
+    nVertices_vtxProb = (float)Vertices.size();
+    MVA0_vtxProb = MVA0_;
+    MVA1_vtxProb = MVA1_;;
+    dZ1_vtxProb = dZ1_;;
+    MVA2_vtxProb = MVA2_;;
+    dZ2_vtxProb = dZ2_;
+
+    vtxProbMVA_ = VertexProbMva_->EvaluateMVA( "BDT" );  
+  
   }
 
   float H4GCandidate::getCosThetaStar_CS(float ebeam) const {
@@ -229,6 +334,7 @@ tp_ ()
   float H4GCandidate::HelicityCosTheta( TLorentzVector Booster, TLorentzVector Boosted) const
   {
     TVector3 BoostVector = Booster.BoostVector();
+   
     Boosted.Boost( -BoostVector.x(), -BoostVector.y(), -BoostVector.z() );
     return Boosted.CosTheta();
   }

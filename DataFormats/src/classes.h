@@ -328,7 +328,8 @@ namespace  {
 
         flashgg::H4GCandidate h4g;
         std::vector<flashgg::H4GCandidate> vec_h4g;
-        edm::Wrapper<std::vector<flashgg::H4GCandidate> > wrp_vec_h4g;
+        edm::Wrapper<std::vector<flashgg::H4GCandidate> > wrp_vec_h4g; 
+
     };
 }
 // Local Variables:
@@ -338,4 +339,3 @@ namespace  {
 // c-basic-offset:4
 // End:
 // vim: tabstop=4 expandtab shiftwidth=4 softtabstop=4
-
