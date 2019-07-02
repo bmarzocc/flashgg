@@ -30,6 +30,21 @@ class JobConfig(object):
                                VarParsing.VarParsing.multiplicity.singleton, # singleton or list
                                VarParsing.VarParsing.varType.string,          # string, int, or float
                                "dataset")
+        self.options.register ('stdDumper',
+                               "", # default value
+                               VarParsing.VarParsing.multiplicity.singleton, # singleton or list
+                               VarParsing.VarParsing.varType.bool,          # string, int, or float
+                               "stdDumper")
+        self.options.register ('vtxBDTDumper',
+                               "", # default value
+                               VarParsing.VarParsing.multiplicity.singleton, # singleton or list
+                               VarParsing.VarParsing.varType.bool,          # string, int, or float
+                               "vtxBDTDumper")
+        self.options.register ('vtxProbDumper',
+                               "", # default value
+                               VarParsing.VarParsing.multiplicity.singleton, # singleton or list
+                               VarParsing.VarParsing.varType.bool,          # string, int, or float
+                               "vtxProbDumper")
         self.options.register ('processId',
                                "", # default value
                                VarParsing.VarParsing.multiplicity.singleton, # singleton or list
